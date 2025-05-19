@@ -74,8 +74,12 @@ module.exports.login = async (req, res, next) => {
       maxAge: 3600000 // 1 hour
     });
 
-    // ✅ Return success message (you can also return user info here if you want)
-    res.json({ message: 'Login successful', token  });
+    // ✅ Return success message
+    res.json({ 
+      message: 'Login successful', 
+      token,
+      userType: user[7] // Return user type
+    });
   } catch (err) {
     next(err);
   }

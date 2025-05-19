@@ -2,6 +2,7 @@ const express = require('express');
 const runMigrations = require('./migrations');
 const userRoutes = require('./routes/user.routes');
 const profileRoutes = require('./routes/profile.routes');
+const adminRoutes = require('./routes/admin.routes');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 
@@ -22,6 +23,7 @@ app.use(cors({
     await runMigrations();
     app.use('/api', userRoutes);
     app.use('/api', profileRoutes);
+    app.use('/api/admin', adminRoutes);
 
     app.listen(PORT, () => {
       console.log(`Server is running on http://localhost:${PORT}`);
