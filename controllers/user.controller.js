@@ -64,7 +64,7 @@ module.exports.login = async (req, res, next) => {
       return res.status(400).json({ message: 'Invalid email or password' });
     }
 
-    const token = jwt.sign({ id: user[0] }, secret, { expiresIn: '1h' });
+    const token = jwt.sign({ id: user[0], type: user[7] }, secret, { expiresIn: '1h' });
 
     // ✅ Set the JWT as a secure, HTTP-only cookie
     res.cookie('jwt', token, {

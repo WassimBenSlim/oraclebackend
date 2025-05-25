@@ -3,6 +3,9 @@ const runMigrations = require('./migrations');
 const userRoutes = require('./routes/user.routes');
 const profileRoutes = require('./routes/profile.routes');
 const adminRoutes = require('./routes/admin.routes');
+const gradesRoutes = require('./routes/grades.routes');
+const metierRoutes = require('./routes/metier.routes');
+const posteRoutes = require('./routes/poste.routes');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 
@@ -24,6 +27,9 @@ app.use(cors({
     app.use('/api', userRoutes);
     app.use('/api', profileRoutes);
     app.use('/api/admin', adminRoutes);
+    app.use('/api', gradesRoutes);
+    app.use('/api', metierRoutes);
+    app.use('/api', posteRoutes);
 
     app.listen(PORT, () => {
       console.log(`Server is running on http://localhost:${PORT}`);
