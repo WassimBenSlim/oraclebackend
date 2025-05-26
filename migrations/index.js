@@ -2,12 +2,19 @@ const { createUserTable } = require('./create-user-table');
 const { createMetiersTable } = require('./create-metiers-table');
 const { createGradesTable } = require('./create-grades-table');
 const { createPostesTable } = require('./create-postes-table');
-const { createExpertiseTables } = require('./create-expertise-table');
 const { createProfilesTable } = require('./create-profiles-table');
 const { createProfileExpMetiersTable } = require('./create-profiles-expertise-metiers-table');
 const { createProfileExpTechniquesTable } = require('./create-profiles-expertise-techniques-table');
 const { createProfileExpLogiciellesTable } = require('./create-profiles-expertise-logicielles-table');
-const { createProfileCompetencesTable } = require('./create-profiles-competences-table');
+const { createCompetencesTable } = require('./create-competences-table');
+const { createExpertiseLogiciellesTable } = require('./create-expertise-logicielles-table');
+const { createExpertiseTechniquesTable } = require('./create-expertise-techniques-table');
+const { createExpertiseMetiersTable } = require('./create-expertise-metiers-table');
+const { createPosteExpertiseMetiersTable } = require('./create-poste-expertise-metiers-table');
+const { createPosteExpertiseTechniquesTable } = require('./create-poste-expertise-technique-table');
+const { createPosteExpertiseLogiciellesTable } = require('./create-poste-expertise-logicielle-table');
+const { createPosteCompetencesTable } = require('./create-poste-competences-table');
+
 
 const runMigrations = async () => {
   try {
@@ -16,7 +23,12 @@ const runMigrations = async () => {
     await createMetiersTable();
     await createGradesTable();
     await createPostesTable();
-    await createExpertiseTables();
+    await createCompetencesTable();
+    await createExpertiseLogiciellesTable();
+    await createExpertiseTechniquesTable();
+    await createExpertiseMetiersTable();
+    
+
     
     // Profile table
     await createProfilesTable();
@@ -25,7 +37,10 @@ const runMigrations = async () => {
     await createProfileExpMetiersTable();
     await createProfileExpTechniquesTable();
     await createProfileExpLogiciellesTable();
-    await createProfileCompetencesTable();
+    await createPosteExpertiseMetiersTable();
+    await createPosteExpertiseTechniquesTable();
+    await createPosteExpertiseLogiciellesTable();
+    await createPosteCompetencesTable();
     
     console.log('✅ All migrations completed successfully');
   } catch (error) {
