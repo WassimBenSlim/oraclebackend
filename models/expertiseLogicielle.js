@@ -40,6 +40,26 @@ class ExpertiseLogicielle {
     }
   }
 
+  static async findById(id) {
+    const sql = `SELECT * FROM expertise_logicielles WHERE id = :id AND active = 1`;
+    const conn = await connection();
+    try {
+      const result = await conn.execute(sql, { id });
+      if (result.rows.length === 0) return null;
+      const row = result.rows[0];
+      return {
+        _id: row[0],
+        expertiseName: row[1],
+        expertiseName_en: row[2],
+        active: row[3],
+        createdAt: row[4],
+        updatedAt: row[5]
+      };
+    } finally {
+      await conn.close();
+    }
+  }
+
   static async updateById(id, { expertiseName, expertiseName_en }) {
     const sql = `
       UPDATE expertise_logicielles
@@ -58,12 +78,31 @@ class ExpertiseLogicielle {
   }
 
   static async deleteById(id) {
-    const sql = `UPDATE expertise_logicielles SET active = 0 WHERE id = :id`;
     const conn = await connection();
     try {
-      const result = await conn.execute(sql, { id }, { autoCommit: true });
+      conn.autoCommit = false;
+      
+      // 1. Delete from junction table first
+      await conn.execute(
+        `DELETE FROM poste_expertise_logicielles WHERE expertise_logicielle_id = :id`,
+        { id },
+        { autoCommit: false }
+      );
+      
+      // 2. Soft delete from main table
+      const result = await conn.execute(
+        `UPDATE expertise_logicielles SET active = 0 WHERE id = :id`,
+        { id },
+        { autoCommit: false }
+      );
+      
+      await conn.commit();
       return result.rowsAffected > 0;
+    } catch (error) {
+      await conn.rollback();
+      throw error;
     } finally {
+      conn.autoCommit = true;
       await conn.close();
     }
   }

@@ -28,7 +28,7 @@ class Competence {
     try {
       const result = await conn.execute(sql, { search: `%${searchTerm.toLowerCase()}%` });
       return result.rows.map(row => ({
-        _id: row[0],  // Using _id to match frontend expectation
+        _id: row[0],
         competenceName: row[1],
         competenceName_en: row[2],
         active: row[3],
@@ -78,12 +78,31 @@ class Competence {
   }
 
   static async deleteById(id) {
-    const sql = `UPDATE competences SET active = 0 WHERE id = :id`;
     const conn = await connection();
     try {
-      const result = await conn.execute(sql, { id }, { autoCommit: true });
+      conn.autoCommit = false;
+      
+      // 1. Delete from junction table first
+      await conn.execute(
+        `DELETE FROM poste_competences WHERE competence_id = :id`,
+        { id },
+        { autoCommit: false }
+      );
+      
+      // 2. Soft delete from main table
+      const result = await conn.execute(
+        `UPDATE competences SET active = 0 WHERE id = :id`,
+        { id },
+        { autoCommit: false }
+      );
+      
+      await conn.commit();
       return result.rowsAffected > 0;
+    } catch (error) {
+      await conn.rollback();
+      throw error;
     } finally {
+      conn.autoCommit = true;
       await conn.close();
     }
   }

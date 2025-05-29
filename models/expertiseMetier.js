@@ -78,12 +78,31 @@ class ExpertiseMetier {
   }
 
   static async deleteById(id) {
-    const sql = `UPDATE expertise_metiers SET active = 0 WHERE id = :id`;
     const conn = await connection();
     try {
-      const result = await conn.execute(sql, { id }, { autoCommit: true });
+      conn.autoCommit = false;
+      
+      // 1. Delete from junction table first
+      await conn.execute(
+        `DELETE FROM poste_expertise_metiers WHERE expertise_metier_id = :id`,
+        { id },
+        { autoCommit: false }
+      );
+      
+      // 2. Soft delete from main table
+      const result = await conn.execute(
+        `UPDATE expertise_metiers SET active = 0 WHERE id = :id`,
+        { id },
+        { autoCommit: false }
+      );
+      
+      await conn.commit();
       return result.rowsAffected > 0;
+    } catch (error) {
+      await conn.rollback();
+      throw error;
     } finally {
+      conn.autoCommit = true;
       await conn.close();
     }
   }
