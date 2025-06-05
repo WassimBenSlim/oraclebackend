@@ -14,6 +14,10 @@ const { createPosteExpertiseMetiersTable } = require('./create-poste-expertise-m
 const { createPosteExpertiseTechniquesTable } = require('./create-poste-expertise-technique-table');
 const { createPosteExpertiseLogiciellesTable } = require('./create-poste-expertise-logicielle-table');
 const { createPosteCompetencesTable } = require('./create-poste-competences-table');
+const { createCollectionsTable } = require('./create-collections-table');
+const { createCollectionProfilesTable } = require('./create-collections-profiles-table');
+const { createCollectionActorsUseTable } = require('./create-collections-actor-use-table');
+const { createCollectionActorsUpdateTable } = require('./create-collections-actor-update-table');
 
 
 const runMigrations = async () => {
@@ -27,6 +31,7 @@ const runMigrations = async () => {
     await createExpertiseLogiciellesTable();
     await createExpertiseTechniquesTable();
     await createExpertiseMetiersTable();
+    await createCollectionsTable();
     
 
     
@@ -41,6 +46,9 @@ const runMigrations = async () => {
     await createPosteExpertiseTechniquesTable();
     await createPosteExpertiseLogiciellesTable();
     await createPosteCompetencesTable();
+    await createCollectionProfilesTable();
+    await createCollectionActorsUseTable();
+    await createCollectionActorsUpdateTable();
     
     console.log('✅ All migrations completed successfully');
   } catch (error) {

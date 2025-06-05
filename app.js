@@ -10,6 +10,7 @@ const competenceRoutes = require('./routes/competence.routes');
 const exepertiseMetierRoutes = require('./routes/expertiseMetier.routes');
 const expertiseTechniqueRoutes= require('./routes/expertiseTechnique.routes');
 const expertiseLogcielleRoutes= require('./routes/expertiseLogicelle.routes');
+const collectionRoutes = require('./routes/collection.routes');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 
@@ -38,6 +39,7 @@ app.use(cors({
     app.use('/api', exepertiseMetierRoutes);
     app.use('/api', expertiseTechniqueRoutes);
     app.use('/api', expertiseLogcielleRoutes);
+    app.use('/api', collectionRoutes);
 
     app.listen(PORT, () => {
       console.log(`Server is running on http://localhost:${PORT}`);
