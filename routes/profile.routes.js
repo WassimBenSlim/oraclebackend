@@ -4,7 +4,8 @@ const {
   addProfile,
   getUserProfile,
   updateUserProfile,
-  deleteProfile
+  deleteProfile,
+  getProfilesWithName
 } = require('../controllers/profile.controller');
 const { authenticate } = require('../config/jwt.config');
 const upload = require('../middlewares/multer');
@@ -21,5 +22,8 @@ router.put('/profil', authenticate, updateUserProfile);
 
 // Delete profile
 router.delete('/profil', authenticate, deleteProfile);
+
+// Get Profile Name
+router.get("/profilesWithName", authenticate, getProfilesWithName);
 
 module.exports = router;

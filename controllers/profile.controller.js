@@ -3,22 +3,66 @@ const {
   getProfileByUserId,
   getProfileById,
   updateProfile,
-  deleteProfile
+  deleteProfile,
+  getProfilesWithName
 } = require('../models/profile');
 const { v4: uuidv4 } = require('uuid');
 
+module.exports.getProfilesWithName = async (req, res, next) => {
+  try {
+    const { search } = req.query;
+    
+    // Validate search parameter
+    if (search && typeof search !== 'string') {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Search parameter must be a string' 
+      });
+    }
+
+    const profiles = await getProfilesWithName(search);
+    
+    if (!profiles || profiles.length === 0) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'No profiles found',
+        profiles: []
+      });
+    }
+
+    return res.json({ 
+      success: true,
+      count: profiles.length,
+      profiles 
+    });
+  } catch (err) {
+    console.error('Error in getProfilesWithName:', err);
+    
+    if (err.errorNum === 904) {
+      return res.status(500).json({
+        success: false,
+        message: 'Database configuration error',
+        details: 'Please contact support'
+      });
+    }
+    
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch profiles'
+    });
+  }
+};
+
 module.exports.addProfile = async (req, res, next) => {
   try {
-    const userId = req.user.id; // From authentication middleware
+    const userId = req.user.id;
     const profileData = req.body;
 
-    // Check if profile already exists
     const existingProfile = await getProfileByUserId(userId);
     if (existingProfile) {
       return res.status(400).json({ message: 'Profile already exists for this user' });
     }
 
-    // Create profile with default values
     const profileId = uuidv4();
     await createProfile({
       id: profileId,
@@ -48,14 +92,13 @@ module.exports.addProfile = async (req, res, next) => {
 
 module.exports.getUserProfile = async (req, res, next) => {
   try {
-    const userId = req.user.id; // From authentication
+    const userId = req.user.id;
     const profile = await getProfileByUserId(userId);
     
     if (!profile) {
       return res.status(404).json({ message: 'Profile not found' });
     }
 
-    // Convert CLOB to JSON where needed
     const formattedProfile = {
       ...profile,
       langues: profile.LANGUES ? JSON.parse(profile.LANGUES) : {},
@@ -65,7 +108,6 @@ module.exports.getUserProfile = async (req, res, next) => {
       expSignificatives_en: profile.EXP_SIGNIFICATIVES_EN ? JSON.parse(profile.EXP_SIGNIFICATIVES_EN) : []
     };
     
-
     res.json(formattedProfile);
   } catch (err) {
     next(err);
