@@ -1,102 +1,119 @@
-const { 
-  createProfile, 
+const {
+  createProfile,
   getProfileByUserId,
   getProfileById,
   updateProfile,
   deleteProfile,
-  getProfilesWithName
-} = require('../models/profile');
-const { v4: uuidv4 } = require('uuid');
+  getProfilesWithName,
+} = require("../models/profile")
+const { getUserByEmail, getUserById } = require("../models/user")
+const { sendNotificationMailForUpdatingForAllCollectionMembers } = require("../services/emailService")
+const { v4: uuidv4 } = require("uuid")
+const PDFDocument = require("pdfkit")
+const archiver = require("archiver")
+const fs = require("fs")
+const path = require("path")
+const nodemailer = require("nodemailer")
+
+// Use your existing Mailtrap configuration
+const transport = nodemailer.createTransport({
+  host: "sandbox.smtp.mailtrap.io",
+  port: 2525,
+  auth: {
+    user: process.env.MAILTRAP_USER,
+    pass: process.env.MAILTRAP_PASS,
+  },
+})
 
 module.exports.getProfilesWithName = async (req, res, next) => {
   try {
-    const { search } = req.query;
-    
+    const { search } = req.query
+
     // Validate search parameter
-    if (search && typeof search !== 'string') {
-      return res.status(400).json({ 
+    if (search && typeof search !== "string") {
+      return res.status(400).json({
         success: false,
-        message: 'Search parameter must be a string' 
-      });
+        message: "Search parameter must be a string",
+      })
     }
 
-    const profiles = await getProfilesWithName(search);
-    
+    const profiles = await getProfilesWithName(search)
+
     if (!profiles || profiles.length === 0) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'No profiles found',
-        profiles: []
-      });
+        message: "No profiles found",
+        profiles: [],
+      })
     }
 
-    return res.json({ 
+    return res.json({
       success: true,
       count: profiles.length,
-      profiles 
-    });
+      profiles,
+    })
   } catch (err) {
-    console.error('Error in getProfilesWithName:', err);
-    
+    console.error("Error in getProfilesWithName:", err)
+
     if (err.errorNum === 904) {
       return res.status(500).json({
         success: false,
-        message: 'Database configuration error',
-        details: 'Please contact support'
-      });
+        message: "Database configuration error",
+        details: "Please contact support",
+      })
     }
-    
+
     return res.status(500).json({
       success: false,
-      message: 'Failed to fetch profiles'
-    });
+      message: "Failed to fetch profiles",
+    })
   }
-};
+}
 
 module.exports.addProfile = async (req, res, next) => {
   try {
-    const userId = req.user.id;
-    const profileData = req.body;
+    const userId = req.user.id
+    const profileData = req.body
 
-    const existingProfile = await getProfileByUserId(userId);
+    const existingProfile = await getProfileByUserId(userId)
     if (existingProfile) {
-      return res.status(400).json({ message: 'Profile already exists for this user' });
+      return res.status(400).json({ message: "Profile already exists for this user" })
     }
 
-    const profileId = uuidv4();
+    const profileId = uuidv4()
     await createProfile({
       id: profileId,
       user_id: userId,
-      cvLanguage: profileData.cvLanguage || 'fr',
+      cvLanguage: profileData.cvLanguage || "fr",
       description: profileData.description || null,
       experienceYears: profileData.experienceYears || null,
-      langues: JSON.stringify(profileData.langues || {FR:false,IT:false,EN:false,DE:false,ES:false}),
-      formations: JSON.stringify(profileData.formations || [{type:"",libelle:""}]),
-      formations_en: JSON.stringify(profileData.formations_en || [{type:"",libelle:""}]),
+      langues: JSON.stringify(profileData.langues || { FR: false, IT: false, EN: false, DE: false, ES: false }),
+      formations: JSON.stringify(profileData.formations || [{ type: "", libelle: "" }]),
+      formations_en: JSON.stringify(profileData.formations_en || [{ type: "", libelle: "" }]),
       expSignificatives: JSON.stringify(profileData.expSignificatives || []),
       expSignificatives_en: JSON.stringify(profileData.expSignificatives_en || []),
       poste_id: profileData.poste_id || null,
       grade_id: profileData.grade_id || null,
       metier_id: profileData.metier_id || null,
-      images: profileData.images || null
-    });
+      images: profileData.images || null,
+    })
 
-    res.status(201).json({ 
-      message: 'Profile created successfully',
-      profileId 
-    });
+    res.status(201).json({
+      message: "Profile created successfully",
+      profileId,
+    })
   } catch (err) {
-    next(err);
+    next(err)
   }
-};
+}
 
 module.exports.getUserProfile = async (req, res, next) => {
   try {
-    const userId = req.user.id;
-    const profile = await getProfileByUserId(userId);
-    
+    const userId = req.user.id
+    const profile = await getProfileByUserId(userId)
+
     if (!profile) {
-      return res.status(404).json({ message: 'Profile not found' });
+      return res.status(404).json({ message: "Profile not found" })
     }
 
     const formattedProfile = {
@@ -105,22 +122,22 @@ module.exports.getUserProfile = async (req, res, next) => {
       formations: profile.FORMATIONS ? JSON.parse(profile.FORMATIONS) : [],
       formations_en: profile.FORMATIONS_EN ? JSON.parse(profile.FORMATIONS_EN) : [],
       expSignificatives: profile.EXP_SIGNIFICATIVES ? JSON.parse(profile.EXP_SIGNIFICATIVES) : [],
-      expSignificatives_en: profile.EXP_SIGNIFICATIVES_EN ? JSON.parse(profile.EXP_SIGNIFICATIVES_EN) : []
-    };
-    
-    res.json(formattedProfile);
+      expSignificatives_en: profile.EXP_SIGNIFICATIVES_EN ? JSON.parse(profile.EXP_SIGNIFICATIVES_EN) : [],
+    }
+
+    res.json(formattedProfile)
   } catch (err) {
-    next(err);
+    next(err)
   }
-};
+}
 
 module.exports.updateUserProfile = async (req, res, next) => {
   try {
-    const userId = req.user.id;
-    const profile = await getProfileByUserId(userId);
-    
+    const userId = req.user.id
+    const profile = await getProfileByUserId(userId)
+
     if (!profile) {
-      return res.status(404).json({ message: 'Profile not found' });
+      return res.status(404).json({ message: "Profile not found" })
     }
 
     const updated = await updateProfile(profile.ID, {
@@ -129,36 +146,270 @@ module.exports.updateUserProfile = async (req, res, next) => {
       formations: JSON.stringify(req.body.formations),
       formations_en: JSON.stringify(req.body.formations_en),
       expSignificatives: JSON.stringify(req.body.expSignificatives),
-      expSignificatives_en: JSON.stringify(req.body.expSignificatives_en)
-    });
+      expSignificatives_en: JSON.stringify(req.body.expSignificatives_en),
+    })
 
     if (!updated) {
-      return res.status(400).json({ message: 'Failed to update profile' });
+      return res.status(400).json({ message: "Failed to update profile" })
     }
 
-    res.json({ message: 'Profile updated successfully' });
+    res.json({ message: "Profile updated successfully" })
   } catch (err) {
-    next(err);
+    next(err)
   }
-};
+}
 
 module.exports.deleteProfile = async (req, res, next) => {
   try {
-    const userId = req.user.id;
-    const profile = await getProfileByUserId(userId);
-    
+    const userId = req.user.id
+    const profile = await getProfileByUserId(userId)
+
     if (!profile) {
-      return res.status(404).json({ message: 'Profile not found' });
+      return res.status(404).json({ message: "Profile not found" })
     }
 
-    const deleted = await deleteProfile(profile.ID);
-    
+    const deleted = await deleteProfile(profile.ID)
+
     if (!deleted) {
-      return res.status(400).json({ message: 'Failed to delete profile' });
+      return res.status(400).json({ message: "Failed to delete profile" })
     }
 
-    res.json({ message: 'Profile deleted successfully' });
+    res.json({ message: "Profile deleted successfully" })
   } catch (err) {
-    next(err);
+    next(err)
   }
-};
+}
+
+// Generate PDF CV for a single profile
+const generateProfilePDF = async (profile, user) => {
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument()
+      const chunks = []
+
+      doc.on("data", (chunk) => chunks.push(chunk))
+      doc.on("end", () => resolve(Buffer.concat(chunks)))
+      doc.on("error", reject)
+
+      // PDF Header with company branding
+      doc.fontSize(20).text(`${user[1]} ${user[2]}`, 50, 50) // prenom nom
+      doc.fontSize(12).text(`Email: ${user[3]}`, 50, 80) // email
+
+      let yPosition = 120
+
+      // Experience Years
+      if (profile.EXPERIENCEYEARS) {
+        doc.text(`Années d'expérience: ${profile.EXPERIENCEYEARS}`, 50, yPosition)
+        yPosition += 20
+      }
+
+      // Description
+      if (profile.DESCRIPTION) {
+        doc.text("Description:", 50, yPosition)
+        yPosition += 15
+        doc.text(profile.DESCRIPTION, 50, yPosition, { width: 500 })
+        yPosition += 60
+      }
+
+      // Languages
+      if (profile.LANGUES) {
+        try {
+          const langues = JSON.parse(profile.LANGUES)
+          const activeLanguages = Object.keys(langues).filter((lang) => langues[lang])
+          if (activeLanguages.length > 0) {
+            doc.text("Langues:", 50, yPosition)
+            yPosition += 15
+            doc.text(activeLanguages.join(", "), 50, yPosition)
+            yPosition += 40
+          }
+        } catch (e) {
+          console.error("Error parsing languages:", e)
+        }
+      }
+
+      // Formations
+      const formations = profile.CVLANGUAGE === "en" ? profile.FORMATIONS_EN : profile.FORMATIONS
+      if (formations) {
+        try {
+          const formationsData = JSON.parse(formations)
+          if (formationsData.length > 0 && formationsData[0].libelle) {
+            doc.text("Formations:", 50, yPosition)
+            yPosition += 15
+            formationsData.forEach((formation) => {
+              if (formation.libelle) {
+                doc.text(`• ${formation.type}: ${formation.libelle}`, 50, yPosition)
+                yPosition += 20
+              }
+            })
+            yPosition += 20
+          }
+        } catch (e) {
+          console.error("Error parsing formations:", e)
+        }
+      }
+
+      // Significant Experience
+      const experience = profile.CVLANGUAGE === "en" ? profile.EXPSIGNIFICATIVES_EN : profile.EXPSIGNIFICATIVES
+      if (experience) {
+        try {
+          const expData = JSON.parse(experience)
+          if (expData.length > 0) {
+            doc.text("Expériences significatives:", 50, yPosition)
+            yPosition += 15
+            expData.forEach((exp) => {
+              if (exp.description) {
+                doc.text(`• ${exp.description}`, 50, yPosition, { width: 500 })
+                yPosition += 30
+              }
+            })
+          }
+        } catch (e) {
+          console.error("Error parsing experience:", e)
+        }
+      }
+
+      doc.end()
+    } catch (error) {
+      reject(error)
+    }
+  })
+}
+
+// Create ZIP file with multiple CV PDFs
+const createCVZip = async (emails, zipTitle) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const tempDir = path.join(__dirname, "../temp")
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true })
+      }
+
+      const zipPath = path.join(tempDir, `${zipTitle || "CVs"}_${uuidv4()}.zip`)
+      const output = fs.createWriteStream(zipPath)
+      const archive = archiver("zip", { zlib: { level: 9 } })
+
+      output.on("close", () => resolve(zipPath))
+      archive.on("error", reject)
+      archive.pipe(output)
+
+      // Generate PDF for each email
+      for (const email of emails) {
+        try {
+          const user = await getUserByEmail(email)
+          if (user) {
+            const profile = await getProfileByUserId(user[0]) // user[0] is the ID
+
+            if (profile) {
+              const pdfBuffer = await generateProfilePDF(profile, user)
+              const fileName = `${user[1]}_${user[2]}_CV.pdf` // prenom_nom_CV.pdf
+              archive.append(pdfBuffer, { name: fileName })
+            }
+          }
+        } catch (error) {
+          console.error(`Error generating PDF for email ${email}:`, error)
+          // Continue with other profiles even if one fails
+        }
+      }
+
+      archive.finalize()
+    } catch (error) {
+      reject(error)
+    }
+  })
+}
+
+// Send email with CV ZIP function
+module.exports.sendEmailWithZip = async (req, res) => {
+  try {
+    const { recipients, subject, content, selectedProfile, titleJointe } = req.body
+
+    if (!recipients || !selectedProfile || selectedProfile.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Recipients and selected profiles are required",
+      })
+    }
+
+    // Create ZIP file with CVs
+    const zipPath = await createCVZip(selectedProfile, titleJointe)
+
+    // Send email with ZIP attachment using your existing transport
+    const mailOptions = {
+      from: process.env.OFFICIAL_EMAIL,
+      to: recipients,
+      subject: subject || "CVs des collaborateurs",
+      text: content || "Veuillez trouver ci-joint les CVs demandés.",
+      attachments: [
+        {
+          filename: `${titleJointe || "CVs"}.zip`,
+          path: zipPath,
+        },
+      ],
+    }
+
+    await transport.sendMail(mailOptions)
+
+    // Clean up temporary ZIP file after 5 seconds
+    setTimeout(() => {
+      if (fs.existsSync(zipPath)) {
+        fs.unlinkSync(zipPath)
+      }
+    }, 5000)
+
+    res.json({
+      success: true,
+      message: "Email sent successfully",
+      profilesCount: selectedProfile.length,
+    })
+  } catch (error) {
+    console.error("Error sending email with ZIP:", error)
+    res.status(500).json({
+      success: false,
+      message: "Failed to send email",
+      error: error.message,
+    })
+  }
+}
+
+// NEW: Notify users to update their profiles
+module.exports.notifyUpdateAllInCollection = async (req, res) => {
+  try {
+    const { users } = req.body
+
+    // Validate input
+    if (!users || !Array.isArray(users) || users.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Users array is required and cannot be empty",
+      })
+    }
+
+    // Validate user objects have required fields
+    const invalidUsers = users.filter((user) => !user.email || !user.nom || !user.prenom)
+    if (invalidUsers.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "All users must have email, nom, and prenom fields",
+        invalidUsers,
+      })
+    }
+
+    console.log(`Sending notification emails to ${users.length} users`)
+
+    // Use your existing email service function
+    await sendNotificationMailForUpdatingForAllCollectionMembers(users)
+
+    res.json({
+      success: true,
+      message: "Notification emails sent successfully",
+      usersNotified: users.length,
+    })
+  } catch (error) {
+    console.error("Error sending notification emails:", error)
+    res.status(500).json({
+      success: false,
+      message: "Failed to send notification emails",
+      error: error.message,
+    })
+  }
+}

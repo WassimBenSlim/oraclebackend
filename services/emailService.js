@@ -1,116 +1,83 @@
-const nodemailer = require("nodemailer");
-require("dotenv").config();
+const nodemailer = require("nodemailer")
 
-var transport = nodemailer.createTransport({
-  host: "sandbox.smtp.mailtrap.io", // <<< SANDBOX not live
+// Use your existing Mailtrap configuration - FIXED: createTransport (not createTransporter)
+const transport = nodemailer.createTransport({
+  host: "sandbox.smtp.mailtrap.io",
   port: 2525,
   auth: {
     user: process.env.MAILTRAP_USER,
-    pass: process.env.MAILTRAP_PASS
-  }
-});
+    pass: process.env.MAILTRAP_PASS,
+  },
+})
 
-module.exports.sendConfirmationEmail = async (email, activationCode) => {
+const sendNotificationMailForUpdatingForAllCollectionMembers = async (users) => {
   try {
-    await transport.sendMail({
-      from: process.env.OFFICIAL_EMAIL,
-      to: email,
-      subject: "Confirmer votre compte",
-      html: `<h1>Email de Confirmation</h1>
-        <p>Pour activer votre compte, veuillez cliquer sur ce lien :</p>
-        <a href="http://localhost:3000/api/confirm/${activationCode}">Cliquer ici</a>`,
-    });
-    console.log("Confirmation email sent successfully.");
-  } catch (err) {
-    console.error("Error sending confirmation email:", err);
-  }
-};
+    console.log(`Preparing to send notification emails to ${users.length} users`)
 
-module.exports.sendResetPasswordEmail = async (email, resetURL) => {
-  try {
-    await transport.sendMail({
-      from: process.env.OFFICIAL_EMAIL,
-      to: email,
-      subject: "Reset password",
-      html: `<a href=${resetURL}>Reset link</a>`,
-    });
-    console.log("Reset password email sent successfully.");
-  } catch (err) {
-    console.error("Error sending reset password email:", err);
-  }
-};
+    // Your application URL - add this to your .env file
+    const appUrl = process.env.APP_URL || "http://localhost:3000/profile"
 
+    const emailPromises = users.map(async (user) => {
+      const mailOptions = {
+        from: process.env.OFFICIAL_Mail || process.env.MAILTRAP_USER, // Using your existing OFFICIAL_Mail
+        to: user.email,
+        subject: "Mise à jour de votre profil MyCV requise",
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #333;">Bonjour ${user.prenom},</h2>
+            
+            <p style="color: #555; line-height: 1.6;">
+              Nous vous prions de bien vouloir mettre à jour votre profil sur MyCV dans les plus brefs délais.
+            </p>
+            
+            <p style="color: #555; line-height: 1.6;">
+              Voici le lien pour y accéder : 
+              <a href="${appUrl}" style="color: #007bff; text-decoration: none;">
+                ${appUrl}
+              </a>
+            </p>
+            
+            <p style="color: #555; line-height: 1.6;">
+              Nous vous remercions pour votre compréhension et votre coopération.
+            </p>
+            
+            <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+            
+            <p style="color: #888; font-size: 12px;">
+              Ceci est un e-mail automatique, merci de ne pas répondre.
+            </p>
+          </div>
+        `,
+        text: `
+Bonjour ${user.prenom},
 
-module.exports.contactUsEmail = async (email, name, subject, message) => {
-  try {
-      // Send email
-      await transport.sendMail({
-        from: process.env.OFFICIAL_EMAIL,
-        to: email,
-        subject: `Message from ${email} - ${subject}`,
-        html: `<p>Name: ${name}</p><p>Message: ${message}</p>`
-      });
-      console.log('Email sent successfully');
-    } catch (error) {
-      console.error('Error sending email:', error);
-      throw error; // Rethrow the error to handle it in the caller function
+Nous vous prions de bien vouloir mettre à jour votre profil sur MyCV dans les plus brefs délais.
+
+Voici le lien pour y accéder : ${appUrl}
+
+Nous vous remercions pour votre compréhension et votre coopération.
+
+Ceci est un e-mail automatique, merci de ne pas répondre.
+        `.trim(),
+      }
+
+      return transport.sendMail(mailOptions)
+    })
+
+    // Send all emails in parallel
+    await Promise.all(emailPromises)
+    console.log(`Successfully sent notification emails to ${users.length} users`)
+
+    return {
+      success: true,
+      message: `Notification emails sent to ${users.length} users`,
     }
+  } catch (error) {
+    console.error("Error sending notification emails:", error)
+    throw new Error(`Failed to send notification emails: ${error.message}`)
+  }
 }
 
-
-module.exports.sendNotificationMailForUpdating = async (email,nom,prenom) => {
-  const prenomCap = prenom.charAt(0).toUpperCase() + prenom.slice(1);
-  await transport.sendMail({
-          from : process.env.OFFICIAL_EMAIL,
-          to : email,
-          subject : "MyCV: Mettez à jour votre profil",
-          html: `
-              <div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;">
-                  <div style="background-color: #f9f9f9; padding: 20px; border-radius: 10px;">
-                      <p style="font-size: 16px; line-height: 1.6; color: #333;">Bonjour ${prenomCap},</p>
-                      <p style="font-size: 16px; line-height: 1.6; color: #333;">Nous vous prions de bien vouloir mettre à jour votre profil sur MyCV dans les plus brefs délais.</p>
-                      <p style="font-size: 16px; line-height: 1.6; color: #333;">Voici le lien pour y accéder : ${URL}</p>
-                      <p style="font-size: 16px; line-height: 1.6; color: #333;">Nous vous remercions pour votre compréhension et votre coopération.</p>
-                      <p style="font-size: 14px; color: #666; margin-top: 20px;">Ceci est un e-mail automatique, merci de ne pas répondre.</p>
-                  </div>
-                  <div style="text-align: center; margin-top: 20px;">
-                      <img src="https://i.imgur.com/HPW8as8.png" alt="Logo MyCV" style="max-width: 200px;">
-                  </div>
-              </div>
-              `
-      }
-  ).catch((err) => console.log(err));
-};
-
-
-module.exports.sendNotificationMailForUpdatingForAllCollectionMembers = async (users) => {
-  try {
-      const mailsToSend = users.map((user) => {
-          const { email, nom, prenom } = user;
-          const prenomCap = prenom.charAt(0).toUpperCase() + prenom.slice(1);
-          return transport.sendMail({
-              from: process.env.OFFICIAL_EMAIL,
-              to: email,
-              subject: "MyCV - Mettez à jour votre profil",
-              html: `
-                  <div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;">
-                      <div style="background-color: #f9f9f9; padding: 20px; border-radius: 10px;">
-                          <p style="font-size: 16px; line-height: 1.6; color: #333;">Bonjour ${prenomCap},</p>
-                          <p style="font-size: 16px; line-height: 1.6; color: #333;">Nous vous prions de bien vouloir mettre à jour votre profil sur MyCV dans les plus brefs délais.</p>
-                          <p style="font-size: 16px; line-height: 1.6; color: #333;">Voici le lien pour y accéder : ${URL}</p>
-                          <p style="font-size: 16px; line-height: 1.6; color: #333;">Nous vous remercions pour votre compréhension et votre coopération.</p>
-                          <p style="font-size: 14px; color: #666; margin-top: 20px;">Ceci est un e-mail automatique, merci de ne pas répondre.</p>
-                      </div>
-                      <div style="text-align: center; margin-top: 20px;">
-                          <img src="https://i.imgur.com/HPW8as8.png" alt="Logo MyCV" style="max-width: 200px;">
-                      </div>
-                  </div>
-              `
-          });
-      });
-      await Promise.all(mailsToSend);
-  } catch (err) {
-      console.error('Une erreur est survenue lors de l\'envoi des e-mails :', err);
-  }
-};
-
+module.exports = {
+  sendNotificationMailForUpdatingForAllCollectionMembers,
+}
