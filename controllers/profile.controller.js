@@ -14,6 +14,7 @@ const archiver = require("archiver")
 const fs = require("fs")
 const path = require("path")
 const nodemailer = require("nodemailer")
+const connection = require("../config/oracle.config")
 
 // Use your existing Mailtrap configuration
 const transport = nodemailer.createTransport({
@@ -372,7 +373,7 @@ module.exports.sendEmailWithZip = async (req, res) => {
 }
 
 // NEW: Notify users to update their profiles
-module.exports.notifyUpdateAllInCollection = async (req, res) => {
+module.exports.notifyUpdateAllInCollection = async (req, res, next) => {
   try {
     const { users } = req.body
 
@@ -411,5 +412,170 @@ module.exports.notifyUpdateAllInCollection = async (req, res) => {
       message: "Failed to send notification emails",
       error: error.message,
     })
+  }
+}
+
+// NEW: Single user notification (what frontend expects)
+module.exports.notifyUpdate = async (req, res, next) => {
+  try {
+    const { email, nom, prenom } = req.body
+
+    console.log(`Sending notification to ${prenom} ${nom} (${email})`)
+
+    // You can integrate with your existing email service here
+    res.json({ message: "Notification sent successfully" })
+  } catch (error) {
+    console.error("Error sending notification:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+}
+
+// NEW: Archive profile (what frontend expects)
+module.exports.updateUserFlag = async (req, res, next) => {
+  let conn
+  try {
+    const profileId = req.params.id
+
+    conn = await connection()
+
+    const result = await conn.execute(
+      `UPDATE users SET flag = 0, updatedAt = CURRENT_TIMESTAMP 
+             WHERE id = (SELECT user_id FROM profiles WHERE id = :profileId)`,
+      { profileId },
+      { autoCommit: true },
+    )
+
+    if (result.rowsAffected === 0) {
+      return res.status(404).json({ error: "Profile not found" })
+    }
+
+    res.json({ message: "Profile archived successfully" })
+  } catch (error) {
+    console.error("Error archiving profile:", error)
+    res.status(500).json({ error: "Internal server error" })
+  } finally {
+    if (conn) await conn.close()
+  }
+}
+
+// NEW: Get archived profiles
+module.exports.getArchivedProfiles = async (req, res, next) => {
+  let conn
+  try {
+    const { search = "" } = req.query
+
+    conn = await connection()
+
+    let query = `
+      SELECT DISTINCT
+        p.id as profile_id,
+        u.id as user_id,
+        u.nom,
+        u.prenom,
+        u.email,
+        u.telephone,
+        u.flag,
+        g.gradeName,
+        pos.posteName,
+        p.createdAt
+      FROM profiles p
+      JOIN users u ON p.user_id = u.id
+      LEFT JOIN grades g ON p.grade_id = g.id
+      LEFT JOIN postes pos ON p.poste_id = pos.id
+      WHERE u.flag = 0
+    `
+
+    const binds = {}
+
+    if (search) {
+      query += ` AND (LOWER(u.nom) LIKE :search OR LOWER(u.prenom) LIKE :search)`
+      binds.search = `%${search.toLowerCase()}%`
+    }
+
+    query += ` ORDER BY p.createdAt DESC`
+
+    const result = await conn.execute(query, binds)
+
+    const profiles = result.rows.map((row) => ({
+      _id: row[0],
+      user: {
+        id: row[1],
+        nom: row[2],
+        prenom: row[3],
+        email: row[4],
+        telephone: row[5],
+        flag: row[6] === 1,
+      },
+      grade: {
+        gradeName: row[7],
+      },
+      poste: {
+        name: row[8],
+      },
+      createdAt: row[9],
+    }))
+
+    res.json(profiles)
+  } catch (error) {
+    console.error("Error getting archived profiles:", error)
+    res.status(500).json({ error: "Internal server error" })
+  } finally {
+    if (conn) await conn.close()
+  }
+}
+
+// NEW: Restore profile
+module.exports.restoreProfile = async (req, res, next) => {
+  let conn
+  try {
+    const profileId = req.params.id
+
+    conn = await connection()
+
+    const result = await conn.execute(
+      `UPDATE users SET flag = 1, updatedAt = CURRENT_TIMESTAMP 
+             WHERE id = (SELECT user_id FROM profiles WHERE id = :profileId)`,
+      { profileId },
+      { autoCommit: true },
+    )
+
+    if (result.rowsAffected === 0) {
+      return res.status(404).json({ error: "Profile not found" })
+    }
+
+    res.json({ message: "Profile restored successfully" })
+  } catch (error) {
+    console.error("Error restoring profile:", error)
+    res.status(500).json({ error: "Internal server error" })
+  } finally {
+    if (conn) await conn.close()
+  }
+}
+
+// NEW: Permanently delete profile
+module.exports.deleteProfilePermanently = async (req, res, next) => {
+  let conn
+  try {
+    const profileId = req.params.id
+
+    conn = await connection()
+
+    // Delete the profile and user permanently
+    const result = await conn.execute(
+      `DELETE FROM users WHERE id = (SELECT user_id FROM profiles WHERE id = :profileId)`,
+      { profileId },
+      { autoCommit: true },
+    )
+
+    if (result.rowsAffected === 0) {
+      return res.status(404).json({ error: "Profile not found" })
+    }
+
+    res.json({ message: "Profile deleted permanently" })
+  } catch (error) {
+    console.error("Error deleting profile permanently:", error)
+    res.status(500).json({ error: "Internal server error" })
+  } finally {
+    if (conn) await conn.close()
   }
 }

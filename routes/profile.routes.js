@@ -7,7 +7,12 @@ const {
   deleteProfile,
   getProfilesWithName,
   sendEmailWithZip,
-  notifyUpdateAllInCollection, // Add this new import
+  notifyUpdateAllInCollection,
+  notifyUpdate,
+  updateUserFlag,
+  getArchivedProfiles,
+  restoreProfile,
+  deleteProfilePermanently,
 } = require("../controllers/profile.controller")
 const { authenticate } = require("../config/jwt.config")
 const upload = require("../middlewares/multer")
@@ -30,7 +35,22 @@ router.get("/profilesWithName", authenticate, getProfilesWithName)
 // Send CVs via email
 router.post("/profil/sendEmailWithZip", authenticate, sendEmailWithZip)
 
-// NEW: Notify users to update their profiles
+// Notify users to update their profiles (bulk)
 router.post("/profil/notifyUpdateAllInCollection", authenticate, notifyUpdateAllInCollection)
+
+// Single user notification
+router.post("/profil/notifyUpdate", authenticate, notifyUpdate)
+
+// Archive profile
+router.put("/profil/:id/updateUserFlag", authenticate, updateUserFlag)
+
+// NEW: Get archived profiles
+router.get("/profilee/getArchived", authenticate, getArchivedProfiles)
+
+// NEW: Restore archived profile
+router.put("/profil/restore/:id", authenticate, restoreProfile)
+
+// NEW: Delete profile permanently
+router.delete("/profil/delete/:id", authenticate, deleteProfilePermanently)
 
 module.exports = router
