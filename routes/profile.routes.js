@@ -13,6 +13,7 @@ const {
   getArchivedProfiles,
   restoreProfile,
   deleteProfilePermanently,
+  getProfileForPreview, // Add this import
 } = require("../controllers/profile.controller")
 const { authenticate } = require("../config/jwt.config")
 const upload = require("../middlewares/multer")
@@ -52,5 +53,8 @@ router.put("/profil/restore/:id", authenticate, restoreProfile)
 
 // NEW: Delete profile permanently
 router.delete("/profil/delete/:id", authenticate, deleteProfilePermanently)
+
+// NEW: Get complete profile data for CV preview
+router.get("/profil/preview/:profileId", authenticate, getProfileForPreview)
 
 module.exports = router

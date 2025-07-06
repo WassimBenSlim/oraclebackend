@@ -17,7 +17,7 @@ const nodemailer = require("nodemailer")
 const connection = require("../config/oracle.config")
 
 // Use your existing Mailtrap configuration
-const transport = nodemailer.createTransport({
+const transport = nodemailer.createTransporter({
   host: "sandbox.smtp.mailtrap.io",
   port: 2525,
   auth: {
@@ -25,6 +25,134 @@ const transport = nodemailer.createTransport({
     pass: process.env.MAILTRAP_PASS,
   },
 })
+
+// NEW: Get complete profile data for CV preview
+module.exports.getProfileForPreview = async (req, res, next) => {
+  let conn
+  try {
+    const profileId = req.params.profileId
+
+    if (!profileId) {
+      return res.status(400).json({
+        success: false,
+        message: "Profile ID is required",
+      })
+    }
+
+    conn = await connection()
+
+    // Get complete profile data with user, grade, metier, and poste information
+    const query = `
+      SELECT 
+        p.id as profile_id,
+        p.user_id,
+        p.cvlanguage,
+        p.description,
+        p.experienceyears,
+        p.langues,
+        p.formations,
+        p.formations_en,
+        p.expsignificatives,
+        p.expsignificatives_en,
+        p.images,
+        p.createdat as profile_created,
+        u.id as user_id,
+        u.nom,
+        u.prenom,
+        u.email,
+        u.telephone,
+        u.flag,
+        g.id as grade_id,
+        g.gradename,
+        g.gradename_en,
+        m.id as metier_id,
+        m.metiername,
+        m.metiername_en,
+        pos.id as poste_id,
+        pos.postename,
+        pos.postename_en
+      FROM profiles p
+      JOIN users u ON p.user_id = u.id
+      LEFT JOIN grades g ON p.grade_id = g.id
+      LEFT JOIN metiers m ON p.metier_id = m.id
+      LEFT JOIN postes pos ON p.poste_id = pos.id
+      WHERE p.id = :profileId AND u.flag = 1
+    `
+
+    const result = await conn.execute(query, { profileId })
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Profile not found",
+      })
+    }
+
+    const row = result.rows[0]
+
+    // Format the response to match frontend expectations
+    const profileData = {
+      _id: row[0], // profile_id
+      user_id: row[1],
+      cvLanguage: row[2] || "fr",
+      description: row[3],
+      experienceYears: row[4],
+      langues: row[5] ? JSON.parse(row[5]) : {},
+      formations: row[6] ? JSON.parse(row[6]) : [],
+      formations_en: row[7] ? JSON.parse(row[7]) : [],
+      expSignificatives: row[8] ? JSON.parse(row[8]) : [],
+      expSignificatives_en: row[9] ? JSON.parse(row[9]) : [],
+      images: row[10],
+      createdAt: row[11],
+      user: {
+        _id: row[12], // user_id
+        nom: row[13],
+        prenom: row[14],
+        email: row[15],
+        telephone: row[16],
+        flag: row[17] === 1,
+      },
+      grade: row[18]
+        ? {
+            _id: row[18],
+            gradeName: row[19],
+            gradeName_en: row[20],
+          }
+        : null,
+      metier: row[21]
+        ? {
+            _id: row[21],
+            metierName: row[22],
+            metierName_en: row[23],
+          }
+        : null,
+      poste: row[24]
+        ? {
+            _id: row[24],
+            posteName: row[25],
+            posteName_en: row[26],
+          }
+        : null,
+    }
+
+    // Get additional profile data (competences, expertises) if they exist in your database
+    // You might need to add these queries based on your database structure
+
+    res.json({
+      success: true,
+      profile: profileData,
+    })
+  } catch (error) {
+    console.error("Error fetching profile for preview:", error)
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch profile data",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    })
+  } finally {
+    if (conn) await conn.close()
+  }
+}
 
 module.exports.getProfilesWithName = async (req, res, next) => {
   try {
@@ -395,8 +523,6 @@ module.exports.notifyUpdateAllInCollection = async (req, res, next) => {
       })
     }
 
-    console.log(`Sending notification emails to ${users.length} users`)
-
     // Use your existing email service function
     await sendNotificationMailForUpdatingForAllCollectionMembers(users)
 
@@ -415,22 +541,43 @@ module.exports.notifyUpdateAllInCollection = async (req, res, next) => {
   }
 }
 
-// NEW: Single user notification (what frontend expects)
+// Single user notification (what frontend expects)
 module.exports.notifyUpdate = async (req, res, next) => {
   try {
     const { email, nom, prenom } = req.body
 
-    console.log(`Sending notification to ${prenom} ${nom} (${email})`)
+    // Validate input
+    if (!email || !nom || !prenom) {
+      return res.status(400).json({
+        success: false,
+        message: "Email, nom et prénom sont requis",
+      })
+    }
 
-    // You can integrate with your existing email service here
-    res.json({ message: "Notification sent successfully" })
+    // Use your existing email service function - same as collection notifications
+    const { sendNotificationMailForUpdating } = require("../services/emailService")
+    await sendNotificationMailForUpdating(email, nom, prenom)
+
+    res.status(200).json({
+      success: true,
+      message: `Notification envoyée avec succès à ${prenom.charAt(0).toUpperCase() + prenom.slice(1)} ${nom.toUpperCase()}`,
+      data: {
+        email: email,
+        nom: nom,
+        prenom: prenom,
+      },
+    })
   } catch (error) {
     console.error("Error sending notification:", error)
-    res.status(500).json({ error: "Internal server error" })
+    res.status(500).json({
+      success: false,
+      message: "Erreur lors de l'envoi de la notification",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    })
   }
 }
 
-// NEW: Archive profile (what frontend expects)
+// Archive profile (what frontend expects)
 module.exports.updateUserFlag = async (req, res, next) => {
   let conn
   try {
@@ -458,7 +605,7 @@ module.exports.updateUserFlag = async (req, res, next) => {
   }
 }
 
-// NEW: Get archived profiles
+// Get archived profiles
 module.exports.getArchivedProfiles = async (req, res, next) => {
   let conn
   try {
@@ -524,7 +671,7 @@ module.exports.getArchivedProfiles = async (req, res, next) => {
   }
 }
 
-// NEW: Restore profile
+// Restore profile
 module.exports.restoreProfile = async (req, res, next) => {
   let conn
   try {
@@ -552,7 +699,7 @@ module.exports.restoreProfile = async (req, res, next) => {
   }
 }
 
-// NEW: Permanently delete profile
+// Permanently delete profile
 module.exports.deleteProfilePermanently = async (req, res, next) => {
   let conn
   try {
