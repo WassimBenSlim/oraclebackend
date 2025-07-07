@@ -17,7 +17,7 @@ const nodemailer = require("nodemailer")
 const connection = require("../config/oracle.config")
 
 // Use your existing Mailtrap configuration
-const transport = nodemailer.createTransporter({
+const transport = nodemailer.createTransport({
   host: "sandbox.smtp.mailtrap.io",
   port: 2525,
   auth: {
@@ -25,6 +25,136 @@ const transport = nodemailer.createTransporter({
     pass: process.env.MAILTRAP_PASS,
   },
 })
+
+// NEW: Get all profiles with statistics for dashboard
+module.exports.getProfiles = async (req, res, next) => {
+  let conn
+  try {
+    conn = await connection()
+
+    // Get all profiles with complete data
+    const profilesQuery = `
+      SELECT 
+        p.id as profile_id,
+        p.user_id,
+        p.cvlanguage,
+        p.description,
+        p.experienceyears,
+        p.langues,
+        p.formations,
+        p.formations_en,
+        p.expsignificatives,
+        p.expsignificatives_en,
+        p.images,
+        p.createdat as profile_created,
+        u.id as user_id,
+        u.nom,
+        u.prenom,
+        u.email,
+        u.telephone,
+        u.flag,
+        u.createdat as user_created,
+        g.id as grade_id,
+        g.gradename,
+        g.gradename_en,
+        m.id as metier_id,
+        m.metiername,
+        m.metiername_en,
+        pos.id as poste_id,
+        pos.postename,
+        pos.postename_en
+      FROM profiles p
+      JOIN users u ON p.user_id = u.id
+      LEFT JOIN grades g ON p.grade_id = g.id
+      LEFT JOIN metiers m ON p.metier_id = m.id
+      LEFT JOIN postes pos ON p.poste_id = pos.id
+      ORDER BY u.createdat DESC
+    `
+
+    const profilesResult = await conn.execute(profilesQuery)
+
+    // Get statistics
+    const statsQueries = {
+      activeProfiles: `SELECT COUNT(*) as count FROM users WHERE flag = 1`,
+      archivedProfiles: `SELECT COUNT(*) as count FROM users WHERE flag = 0`,
+      distinctGrades: `SELECT COUNT(DISTINCT id) as count FROM grades`,
+      distinctPostes: `SELECT COUNT(DISTINCT id) as count FROM postes`,
+      distinctMetiers: `SELECT COUNT(DISTINCT id) as count FROM metiers`,
+    }
+
+    const stats = {}
+    for (const [key, query] of Object.entries(statsQueries)) {
+      const result = await conn.execute(query)
+      stats[key] = result.rows[0][0]
+    }
+
+    // Format profiles data
+    const profiles = profilesResult.rows.map((row) => ({
+      _id: row[0], // profile_id
+      user_id: row[1],
+      cvLanguage: row[2] || "fr",
+      description: row[3],
+      experienceYears: row[4],
+      langues: row[5] ? JSON.parse(row[5]) : {},
+      formations: row[6] ? JSON.parse(row[6]) : [],
+      formations_en: row[7] ? JSON.parse(row[7]) : [],
+      expSignificatives: row[8] ? JSON.parse(row[8]) : [],
+      expSignificatives_en: row[9] ? JSON.parse(row[9]) : [],
+      images: row[10],
+      createdAt: row[11],
+      user: {
+        _id: row[12], // user_id
+        nom: row[13],
+        prenom: row[14],
+        email: row[15],
+        telephone: row[16],
+        flag: row[17] === 1,
+        createdAt: row[18],
+      },
+      grade: row[19]
+        ? {
+            _id: row[19],
+            gradeName: row[20],
+            gradeName_en: row[21],
+          }
+        : null,
+      metier: row[22]
+        ? {
+            _id: row[22],
+            metierName: row[23],
+            metierName_en: row[24],
+          }
+        : null,
+      poste: row[25]
+        ? {
+            _id: row[25],
+            name: row[26], // Note: using 'name' to match frontend expectations
+            posteName: row[26],
+            posteName_en: row[27],
+          }
+        : null,
+    }))
+
+    res.json({
+      success: true,
+      profiles,
+      NbrProfileActive: stats.activeProfiles,
+      NbrProfileArchive: stats.archivedProfiles,
+      NbrGradeDistinct: stats.distinctGrades,
+      NbrPosteDistinct: stats.distinctPostes,
+      NbrMetierDistinct: stats.distinctMetiers,
+    })
+  } catch (error) {
+    console.error("Error fetching profiles for dashboard:", error)
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch profiles data",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    })
+  } finally {
+    if (conn) await conn.close()
+  }
+}
 
 // NEW: Get complete profile data for CV preview
 module.exports.getProfileForPreview = async (req, res, next) => {

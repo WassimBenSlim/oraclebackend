@@ -13,7 +13,8 @@ const {
   getArchivedProfiles,
   restoreProfile,
   deleteProfilePermanently,
-  getProfileForPreview, // Add this import
+  getProfileForPreview,
+  getProfiles, // Add this import
 } = require("../controllers/profile.controller")
 const { authenticate } = require("../config/jwt.config")
 const upload = require("../middlewares/multer")
@@ -32,6 +33,9 @@ router.delete("/profil", authenticate, deleteProfile)
 
 // Get Profile Name
 router.get("/profilesWithName", authenticate, getProfilesWithName)
+
+// NEW: Get all profiles with statistics for dashboard
+router.post("/profil/getProfiles", authenticate, getProfiles)
 
 // Send CVs via email
 router.post("/profil/sendEmailWithZip", authenticate, sendEmailWithZip)
