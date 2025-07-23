@@ -259,15 +259,19 @@ const applyFilter = async (req, res, next) => {
 
     let query = `
       SELECT DISTINCT
-        p.id as profile_id,
-        u.id as user_id,
-        u.nom,
-        u.prenom,
-        u.email,
-        u.telephone,
-        u.flag,
-        g.gradeName,
-        pos.posteName
+        p.id as profile_id,         -- 0
+        u.id as user_id,            -- 1
+        u.nom,                     -- 2
+        u.prenom,                  -- 3
+        u.email,                   -- 4
+        u.telephone,               -- 5
+        u.flag,                    -- 6
+        g.id as grade_id,          -- 7
+        g.gradeName,               -- 8
+        g.gradeName_en,            -- 9
+        pos.id as poste_id,        -- 10
+        pos.posteName,             -- 11
+        pos.posteName_en           -- 12
       FROM profiles p
       JOIN users u ON p.user_id = u.id
       LEFT JOIN grades g ON p.grade_id = g.id
@@ -317,12 +321,21 @@ const applyFilter = async (req, res, next) => {
         telephone: row[5],
         flag: row[6] === 1,
       },
-      grade: {
-        gradeName: row[7],
-      },
-      poste: {
-        name: row[8],
-      },
+      grade: row[7]
+        ? {
+            _id: row[7],
+            gradeName: row[8],
+            gradeName_en: row[9],
+          }
+        : null,
+      poste: row[10]
+        ? {
+            _id: row[10],
+            posteName: row[11],
+            posteName_en: row[12],
+          }
+        : null,
+      // metier can be added here if needed, but not selected in this query
     }))
 
     res.json({

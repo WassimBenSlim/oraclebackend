@@ -7,6 +7,7 @@ const {
   deleteUserById,
   getUserById,
 } = require("../models/user")
+const { getProfileByUserId } = require("../models/profile") // NEW: Import getProfileByUserId
 const { sendConfirmationEmail, sendResetPasswordEmail } = require("../services/emailService")
 const { v4: uuidv4 } = require("uuid")
 const bcrypt = require("bcrypt")
@@ -63,18 +64,21 @@ module.exports.login = async (req, res, next) => {
       return res.status(404).json({ message: "No account associated with this email" })
     }
 
+    // Assuming user[8] is the flag for account activation
     if (user[8] === 0) {
       return res.status(403).json({ message: "Account not activated" })
     }
 
+    // Assuming user[6] is the hashed password
     const passwordIsValid = await bcrypt.compare(password, user[6])
     if (!passwordIsValid) {
       return res.status(400).json({ message: "Invalid email or password" })
     }
 
+    // Assuming user[0] is user ID, user[7] is user type
     const token = jwt.sign({ id: user[0], type: user[7] }, secret, { expiresIn: "1h" })
 
-    // ✅ Set the JWT as a secure, HTTP-only cookie
+    // Set the JWT as a secure, HTTP-only cookie
     res.cookie("jwt", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production", // true in production
@@ -82,7 +86,7 @@ module.exports.login = async (req, res, next) => {
       maxAge: 3600000, // 1 hour
     })
 
-    // ✅ Return success message
+    // Return success message
     res.json({
       message: "Login successful",
       token,
@@ -162,12 +166,13 @@ module.exports.deleteUser = async (req, res, next) => {
 module.exports.getLoggedInUser = async (req, res, next) => {
   try {
     const userId = req.user.id // Comes from JWT payload
-    const user = await getUserById(userId)
+    const user = await getUserById(userId) // This returns an array-like object from Oracle
 
     if (!user) {
       return res.status(404).json({ message: "User not found" })
     }
 
+    // Format basic user data from the array-like Oracle result
     const userData = {
       id: user[0],
       prenom: user[1],
@@ -177,6 +182,55 @@ module.exports.getLoggedInUser = async (req, res, next) => {
       telephone: user[5],
       type: user[7],
       flag: user[8],
+    }
+
+    // NEW: Fetch user's profile
+    const userProfile = await getProfileByUserId(userId)
+
+    // NEW: If a profile exists, format it and add to the response
+    if (userProfile) {
+      // Oracle returns column names in uppercase by default
+      const formattedProfile = {
+        _id: userProfile.ID,
+        user: {
+          _id: userProfile.USER_ID,
+          // You might want to fetch full user details here if not already available
+          // or rely on the userData already constructed
+        },
+        cvLanguage: userProfile.CVLANGUAGE || "fr",
+        description: userProfile.DESCRIPTION,
+        experienceYears: userProfile.EXPERIENCEYEARS,
+        images: userProfile.IMAGES,
+        // Parse JSON string fields
+        langues: userProfile.LANGUES ? JSON.parse(userProfile.LANGUES) : {},
+        formations: userProfile.FORMATIONS ? JSON.parse(userProfile.FORMATIONS) : [],
+        formations_en: userProfile.FORMATIONS_EN ? JSON.parse(userProfile.FORMATIONS_EN) : [],
+        expSignificatives: userProfile.EXP_SIGNIFICATIVES ? JSON.parse(userProfile.EXP_SIGNIFICATIVES) : [],
+        expSignificatives_en: userProfile.EXP_SIGNIFICATIVES_EN ? JSON.parse(userProfile.EXP_SIGNIFICATIVES_EN) : [],
+        grade: userProfile.GRADE_ID
+          ? {
+              _id: userProfile.GRADE_ID,
+              gradeName: userProfile.GRADE_NAME,
+              gradeName_en: userProfile.GRADE_NAME_EN,
+            }
+          : null,
+        metier: userProfile.METIER_ID
+          ? {
+              _id: userProfile.METIER_ID,
+              metierName: userProfile.METIER_NAME,
+              metierName_en: userProfile.METIER_NAME_EN,
+            }
+          : null,
+        poste: userProfile.POSTE_ID
+          ? {
+              _id: userProfile.POSTE_ID,
+              posteName: userProfile.POSTE_NAME,
+              posteName_en: userProfile.POSTE_NAME_EN,
+            }
+          : null,
+      }
+      // Add the formatted profile to the response data under the 'profil' key
+      userData.profil = formattedProfile
     }
 
     res.status(200).json(userData)
